@@ -2,11 +2,16 @@ using UnityEngine;
 
 public class BlockPlacer : MonoBehaviour
 {
+    public AudioClip audioClip;
+    public AudioSource audioSource;
     public int prefabindex = 0;
     public GameObject[] blockPrefabs; // Prefab do bloco a ser instanciado
     public float placementDistance = 5f; // Distância máxima para colocar o bloco
     public LayerMask buildableSurface; // Camadas que podem receber blocos
+    public Transform weaponPosition;
     private GameObject previewBlock; // Bloco de visualização
+    public Material[] blockMaterials; // Materiais disponíveis para os blocos
+    private int materialIndex = 0; // Índice do material atual
 
     void Update()
     {
@@ -14,7 +19,13 @@ public class BlockPlacer : MonoBehaviour
 
         if (Input.GetMouseButtonDown(0)) // Botão esquerdo do mouse para construir
         {
-            PlaceBlock();
+            if (prefabindex != 1 && prefabindex != 2)
+                PlaceBlock();
+            else if (prefabindex == 1)
+                PaintBlock();
+            else if (prefabindex == 2)
+                GlueBlock();
+           
         }
         else if (Input.GetMouseButtonDown(1)) // Botão direito do mouse para apagar
         {
@@ -46,7 +57,7 @@ public class BlockPlacer : MonoBehaviour
 
     void UpdatePreviewBlock()
     {
-        if(blockPrefabs[prefabindex] != null)
+        if (blockPrefabs[prefabindex] != null && prefabindex != 1 && prefabindex != 2)
         {
             if (previewBlock == null)
             {
@@ -71,6 +82,18 @@ public class BlockPlacer : MonoBehaviour
                 previewBlock.transform.position = placementPosition;
             }
         }
+        if (prefabindex == 1 || prefabindex == 2)
+        {
+            if (previewBlock == null)
+            {
+                previewBlock = Instantiate(blockPrefabs[prefabindex], weaponPosition);
+                previewBlock.transform.localPosition = Vector3.zero; // Garante que o pincel esteja na posição correta em relação ao personagem
+            }
+            else
+            {
+                previewBlock.transform.position = weaponPosition.position; // Atualiza a posição do pincel para seguir o personagem
+            }
+        }
     }
 
     void PlaceBlock()
@@ -80,6 +103,7 @@ public class BlockPlacer : MonoBehaviour
             // Instancia o bloco na posição e rotação do bloco de visualização
             GameObject go = Instantiate(blockPrefabs[prefabindex], previewBlock.transform.position, previewBlock.transform.rotation);
             go.GetComponentInChildren<Collider>().enabled = true; // Ativa o collider do bloco
+            audioSource.PlayOneShot(audioClip);
         }
     }
 
@@ -94,6 +118,51 @@ public class BlockPlacer : MonoBehaviour
             {
                 Debug.Log("Destroying block");
                 Destroy(hit.collider.transform.parent.gameObject);
+                audioSource.PlayOneShot(audioClip);
+            }
+        }
+    }
+
+    void PaintBlock()
+    {
+        // Lança um raycast a partir da câmera
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit, placementDistance, buildableSurface))
+        {
+            // Verifica se o objeto atingido é um bloco
+            if (hit.collider.gameObject.CompareTag("Block"))
+            {
+                Renderer renderer = hit.collider.GetComponentInChildren<Renderer>();
+                if (renderer != null)
+                {
+                    materialIndex = (materialIndex + 1) % blockMaterials.Length;
+                    renderer.material = blockMaterials[materialIndex];
+                    audioSource.PlayOneShot(audioClip);
+                }
+            }
+        }
+    }
+
+    void GlueBlock() 
+    {
+        // Lança um raycast a partir da câmera
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit, placementDistance, buildableSurface))
+        {
+            // Verifica se o objeto atingido é um bloco
+            if (hit.collider.gameObject.CompareTag("Block"))
+            {
+                Rigidbody rb = hit.collider.GetComponentInParent<Rigidbody>();
+                Debug.Log(rb);
+                if (rb != null)
+                {
+                    if(rb.constraints == RigidbodyConstraints.FreezeAll)
+                        rb.constraints = RigidbodyConstraints.None;
+                    else
+                        rb.constraints = RigidbodyConstraints.FreezeAll;
+                    Debug.Log(rb.constraints);
+                    audioSource.PlayOneShot(audioClip);
+                }
             }
         }
     }
